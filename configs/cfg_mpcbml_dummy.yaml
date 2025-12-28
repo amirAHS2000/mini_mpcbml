@@ -1,0 +1,55 @@
+MODEL:
+  BACKBONE:
+    NAME: simple_embedding_net
+    INPUT_DIM: 2
+    OUTPUT_DIM: 64
+  HEAD:
+    DIM: 64
+
+SOLVER:
+  OPTIMIZER_NAME: Adam
+  BASE_LR: 0.001
+  WEIGHT_LR: 0.0001
+  WEIGHT_MOMENTUM: 0.9
+  WEIGHT_DECAY: 0.0
+  MAX_EPOCHS: 20
+  SCHEDULER_TYPE: cosine
+  ETA_MIN_RATIO: 0.01
+  WARMUP_ITERS: 0
+
+LOSSES:
+  NAME: mpcbml_loss
+  MPCBML_LOSS:
+    # Options: 'random', 'kmeans', 'mean'
+    INIT_METHOD: kmeans
+    N_CLASSES: 4
+    PROTOTYPE_PER_CLASS: 3
+    MA_MOMENTUM: 0.9
+    GAMMA_REG: 0.5
+    LAMBDA_REG: 0.1
+    THETA_IS_LEARNABLE: true
+    INIT_THETA: 2.0
+
+DATA:
+  DATASET_NAME: synthetic_gaussian
+  N_SAMPLES: 3000
+  TRAIN_BATCHSIZE: 128
+  TEST_BATCHSIZE: 128
+  TEST_SPLIT: 0.2
+  NUM_WORKERS: 0
+
+VALIDATION:
+  VERBOSE: 1
+  RECALL_K: [1, 2, 4, 8]
+
+VISUALIZATION:
+  # Control which visualizations to save
+  SAVE_INITIALIZATION: true
+  SAVE_MOVEMENT: true
+  SAVE_TRAJECTORY: true
+  SAVE_DISTANCE: true
+  SAVE_METRICS: true
+
+OUTPUT:
+  SAVE_DIR: ./outputs/toy
+  SAVE_INTERVAL: 5

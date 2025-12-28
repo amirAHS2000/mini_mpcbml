@@ -1,9 +1,14 @@
+# main_updated.py - USING NEW PLUGINS (Visualization Logger + Prototype Initializer Factory)
+# Shows how to integrate the new modular systems
+
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
-from types import SimpleNamespace
-import matplotlib.pyplot as plt
+import argparse
+from pathlib import Path
+
+from utils.config import load_config
 
 from data.base_dataset import SimpleDataset
 from data.data_generator import SyntheticGaussianMixture
@@ -11,206 +16,270 @@ from modeling.backbone.simple_embedding_net import EmbeddingNet
 from losses.mpcbml_loss import MpcbmlLoss
 from data.evaluation.retrieval_metric import compute_recall_at_k
 from utils.prototype_tracker import PrototypeTracker
-from utils.prototype_logger import (
-    plot_prototype_initialization,
-    plot_prototype_movement,
-    plot_movement_distance,
-    plot_prototype_trajectory
-)
+from utils.prototype_logger import plot_prototype_initialization
+from solver.build_optimizer import build_optimizer, build_lr_scheduler, print_optimizer_config
+from utils.visualization_logger import VisualizationLogger, save_prototypes_visualization
+from utils.prototype_initializer_factory import PrototypeInitializerFactory
 
-if __name__ == '__main__':
+
+def print_banner(text: str):
+    """Print formatted banner."""
     print("\n" + "="*70)
-    print("🚀 MPCBML TRAINING WITH PROTOTYPE MOVEMENT VISUALIZATION")
+    print(f"🚀 {text}")
     print("="*70 + "\n")
 
-    # Settings
+
+def main():
+    # ====================================================================
+    # ARGUMENT PARSING & CONFIGURATION
+    # ====================================================================
+    parser = argparse.ArgumentParser(
+        description='MP-CBML Training with YAML Configuration'
+    )
+    parser.add_argument(
+        '--config',
+        type=str,
+        default='configs/mpcbml_toy.yaml',
+        help='Path to YAML config file'
+    )
+    args = parser.parse_args()
+    
+    print_banner("LOADING CONFIGURATION")
+    
+    if not Path(args.config).exists():
+        raise FileNotFoundError(f"Config file not found: {args.config}")
+    
+    cfg = load_config(args.config)
+    print(f"✓ Loaded config from: {args.config}\n")
+    
+    # ====================================================================
+    # DEVICE SETUP
+    # ====================================================================
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-    N_CLASSES = 4
-    K_PROTOS = 3
-    EMBED_DIM = 64
-    BATCH_SIZE = 128
-    LR = 0.001
-    EPOCHS = 20
-
-    # Data
-    print("📊 Generating synthetic dataset...")
-    gen = SyntheticGaussianMixture(n_classes=N_CLASSES, modes_per_class=K_PROTOS, n_samples=3000)
+    print(f"✓ Using device: {DEVICE}\n")
+    
+    # Extract config values
+    N_CLASSES = cfg.LOSSES.MPCBML_LOSS.N_CLASSES
+    K_PROTOS = cfg.LOSSES.MPCBML_LOSS.PROTOTYPE_PER_CLASS
+    EMBED_DIM = cfg.MODEL.HEAD.DIM
+    BATCH_SIZE = cfg.DATA.TRAIN_BATCHSIZE
+    EPOCHS = cfg.SOLVER.MAX_EPOCHS
+    
+    # ====================================================================
+    # 🆕 VISUALIZATION LOGGER SETUP
+    # ====================================================================
+    print_banner("INITIALIZING VISUALIZATION SYSTEM")
+    
+    output_dir = cfg.OUTPUT.SAVE_DIR
+    viz_logger = VisualizationLogger(output_dir)
+    print(f"✓ Visualization logger initialized")
+    print(f"✓ Output directory: {output_dir}\n")
+    
+    # ====================================================================
+    # DATA PREPARATION
+    # ====================================================================
+    print_banner("DATA PREPARATION")
+    
+    print("Generating synthetic dataset...")
+    gen = SyntheticGaussianMixture(
+        n_classes=N_CLASSES,
+        modes_per_class=K_PROTOS,
+        n_samples=cfg.DATA.N_SAMPLES
+    )
     X, y = gen.generate()
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y)
-
-    train_loader = DataLoader(SimpleDataset(X_train, y_train),
-                             batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(SimpleDataset(X_test, y_test),
-                            batch_size=BATCH_SIZE, shuffle=False)
-    print(f"✓ Dataset created: {len(X_train)} training, {len(X_test)} test samples\n")
-
-    # Model & Loss
-    model = EmbeddingNet(input_dim=2, output_dim=EMBED_DIM).to(DEVICE)
-
-    cfg = SimpleNamespace(
-        MODEL=SimpleNamespace(DEVICE=DEVICE, HEAD=SimpleNamespace(DIM=EMBED_DIM)),
-        LOSSES=SimpleNamespace(
-            MPCBML_LOSS=SimpleNamespace(
-                N_CLASSES=N_CLASSES,
-                PROTOTYPE_PER_CLASS=K_PROTOS,
-                MA_MOMENTUM=0.9,
-                GAMMA_REG=0.5,
-                LAMBDA_REG=0.1,
-                THETA_IS_LEARNABLE=True,
-                INIT_THETA=2.0
-            )
-        )
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=cfg.DATA.TEST_SPLIT,
+        stratify=y
     )
-
+    
+    train_loader = DataLoader(
+        SimpleDataset(X_train, y_train),
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=cfg.DATA.NUM_WORKERS
+    )
+    test_loader = DataLoader(
+        SimpleDataset(X_test, y_test),
+        batch_size=cfg.DATA.TEST_BATCHSIZE,
+        shuffle=False,
+        num_workers=cfg.DATA.NUM_WORKERS
+    )
+    
+    print(f"✓ Dataset created: {len(X_train)} training, {len(X_test)} test\n")
+    
+    # ====================================================================
+    # MODEL INITIALIZATION
+    # ====================================================================
+    print_banner("MODEL INITIALIZATION")
+    
+    model = EmbeddingNet(
+        input_dim=cfg.MODEL.BACKBONE.INPUT_DIM,
+        output_dim=EMBED_DIM
+    ).to(DEVICE)
+    
     criterion = MpcbmlLoss(cfg).to(DEVICE)
-
-    # IMPORTANT: Initialize with random prototypes (not K-means)
-    print("🎲 Initializing prototypes with RANDOM initialization...\n")
-    initial_prototypes = initialize_mpcbml(
-        model, train_loader, criterion, DEVICE,
-        use_random_init=True,  # ✅ Random initialization
-        use_kmeans=False         # Skip K-means refinement
+    print(f"✓ Model initialized\n")
+    
+    # ====================================================================
+    # 🆕 PROTOTYPE INITIALIZATION WITH FACTORY PATTERN
+    # ====================================================================
+    print_banner("PROTOTYPE INITIALIZATION")
+    
+    # Create factory
+    init_factory = PrototypeInitializerFactory()
+    
+    # Get initialization method from config
+    init_method = cfg.LOSSES.MPCBML_LOSS.INIT_METHOD
+    
+    print(f"Available methods: {init_factory.list_methods()}")
+    print(f"Using method: {init_method}\n")
+    
+    # Initialize prototypes using selected method
+    initial_prototypes, cluster_sizes = init_factory.initialize(
+        method=init_method,
+        model=model,
+        train_loader=train_loader,
+        n_classes=N_CLASSES,
+        prototype_per_class=K_PROTOS,
+        embed_dim=EMBED_DIM,
+        device=DEVICE
     )
-
+    
+    print(f"✓ Prototypes initialized with '{init_method}' method")
+    print(f"✓ Shape: {initial_prototypes.shape}\n")
+    
     # Create prototype tracker
     tracker = PrototypeTracker(N_CLASSES, K_PROTOS, EMBED_DIM)
     tracker.record(criterion.prototypes, epoch=0)
-
-    # Optimizer
-    optimizer = optim.Adam([
-        {'params': model.parameters()},
-        {'params': criterion.parameters(), 'lr': LR * 10}
-    ], lr=LR)
-
-    # Training Loop
-    print("🎯 Starting training...\n")
-    history = {'epoch': [], 'loss': [], 'r@1': [], 'r@2': []}
-
+    
+    # ====================================================================
+    # OPTIMIZER & SCHEDULER SETUP
+    # ====================================================================
+    print_banner("OPTIMIZER & SCHEDULER SETUP")
+    
+    optimizer_main, optimizer_weights = build_optimizer(cfg, model, criterion)
+    scheduler_main, scheduler_weights = build_lr_scheduler(cfg, optimizer_main, optimizer_weights)
+    
+    print_optimizer_config(optimizer_main, optimizer_weights)
+    
+    # ====================================================================
+    # TRAINING LOOP
+    # ====================================================================
+    print_banner("STARTING TRAINING")
+    
+    history = {
+        'epoch': [],
+        'loss': [],
+        'r@1': [],
+        'r@2': [],
+        'r@4': [],
+        'r@8': []
+    }
+    
     for epoch in range(EPOCHS):
+        # Training phase
         model.train()
         criterion.train()
         total_loss = 0
-
+        
         for batch_x, batch_y in train_loader:
             batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
-            optimizer.zero_grad()
+            
+            optimizer_main.zero_grad()
+            if optimizer_weights is not None:
+                optimizer_weights.zero_grad()
+            
             embeddings = model(batch_x)
             loss = criterion(embeddings, batch_y)
             loss.backward()
-            criterion.constrained_weight_update()
-            optimizer.step()
+            
+            if hasattr(criterion, 'constrained_weight_update'):
+                criterion.constrained_weight_update()
+            
+            optimizer_main.step()
+            if optimizer_weights is not None:
+                optimizer_weights.step()
+            
             total_loss += loss.item()
-
-        # Record prototypes
+        
         tracker.record(criterion.prototypes, epoch=epoch+1)
-
-        # Evaluation
+        
+        scheduler_main.step()
+        if scheduler_weights is not None:
+            scheduler_weights.step()
+        
+        # Evaluation phase
         model.eval()
         with torch.no_grad():
             test_embs, test_targs = [], []
             for bx, by in test_loader:
                 test_embs.append(model(bx.to(DEVICE)))
                 test_targs.append(by.to(DEVICE))
+            
             test_embs = torch.cat(test_embs)
             test_targs = torch.cat(test_targs)
-
-            recalls = compute_recall_at_k(test_embs, test_targs, k_values=(1, 2, 4, 8))
+            
+            recalls = compute_recall_at_k(
+                test_embs,
+                test_targs,
+                k_values=tuple(cfg.VALIDATION.RECALL_K)
+            )
             stats = criterion.get_last_stats()
-
+        
+        # Store metrics
         history['epoch'].append(epoch+1)
-        history['loss'].append(total_loss/len(train_loader))
+        history['loss'].append(total_loss / len(train_loader))
         history['r@1'].append(recalls['R@1'])
         history['r@2'].append(recalls['R@2'])
-
-        print(f"Epoch {epoch+1:02d} | Loss: {total_loss/len(train_loader):.4f} | "
-              f"R@1: {recalls['R@1']:.4f} | R@2: {recalls['R@2']:.4f} | "
-              f"Proto Mvmt: {stats.get('proto_movement_mean', 0):.4f}")
-
+        history['r@4'].append(recalls['R@4'])
+        history['r@8'].append(recalls['R@8'])
+        
+        # Print progress
+        if (epoch + 1) % cfg.VALIDATION.VERBOSE == 0:
+            proto_mvmt = stats.get('proto_movement_mean', 0) if stats else 0
+            print(f"Epoch {epoch+1:03d}/{EPOCHS} | "
+                  f"Loss: {total_loss/len(train_loader):.4f} | "
+                  f"R@1: {recalls['R@1']:.4f}")
+    
     print("\n✓ Training complete!\n")
-
-    # ========================================================================
-    # VISUALIZATIONS
-    # ========================================================================
-
-    print("="*70)
-    print("📈 GENERATING VISUALIZATIONS")
-    print("="*70 + "\n")
-
+    
+    # ====================================================================
+    # 🆕 VISUALIZATIONS USING SEPARATED LOGGER
+    # ====================================================================
+    print_banner("GENERATING VISUALIZATIONS")
+    
     final_prototypes = criterion.prototypes.detach().cpu()
+    
+    # Save prototype visualizations (if enabled in config)
+    viz_config = getattr(cfg, 'VISUALIZATION', None)
+    if viz_config:
+        save_prototypes_visualization(
+            output_dir=output_dir,
+            initial_prototypes=initial_prototypes,
+            final_prototypes=final_prototypes,
+            X_train=X_train,
+            y_train=y_train,
+            n_classes=N_CLASSES,
+            tracker=tracker,
+            save_initialization=getattr(viz_config, 'SAVE_INITIALIZATION', True),
+            save_movement=getattr(viz_config, 'SAVE_MOVEMENT', True),
+            save_trajectory=getattr(viz_config, 'SAVE_TRAJECTORY', True),
+            save_distance=getattr(viz_config, 'SAVE_DISTANCE', True)
+        )
+    
+    # Save training metrics using logger
+    print("\n5️⃣  Plotting training metrics...")
+    viz_logger.plot_training_metrics(history, '05_metrics.png')
+    
+    # ====================================================================
+    # 🆕 SAVE RESULTS USING LOGGER
+    # ====================================================================
+    print_banner("SAVING RESULTS")
+    
+    viz_logger.save_summary(history, args.config, 'summary.txt')
+    viz_logger.print_results(history)
 
-    # 1. Initial state visualization
-    print("1️⃣  Visualizing prototype initialization...")
-    fig1 = plot_prototype_initialization(
-        initial_prototypes.cpu(),
-        initial_kmeans=None,
-        X_train=X_train,
-        y_train=y_train,
-        n_classes=N_CLASSES
-    )
-    if fig1:
-        plt.savefig('01_initialization.png', dpi=150, bbox_inches='tight')
-        print("   ✓ Saved: 01_initialization.png\n")
 
-    # 2. Prototype movement
-    print("2️⃣  Visualizing prototype movement (Random → Trained)...")
-    fig2 = plot_prototype_movement(
-        initial_prototypes.cpu(),
-        final_prototypes,
-        X_train=X_train,
-        y_train=y_train,
-        n_classes=N_CLASSES
-    )
-    if fig2:
-        plt.savefig('02_movement.png', dpi=150, bbox_inches='tight')
-        print("   ✓ Saved: 02_movement.png\n")
-
-    # 3. Evolution trajectory
-    print("3️⃣  Visualizing prototype evolution over epochs...")
-    fig3 = plot_prototype_trajectory(
-        tracker,
-        initial_prototypes.cpu(),
-        X_train=X_train,
-        y_train=y_train,
-        n_classes=N_CLASSES,
-        sample_epochs=5
-    )
-    if fig3:
-        plt.savefig('03_trajectory.png', dpi=150, bbox_inches='tight')
-        print("   ✓ Saved: 03_trajectory.png\n")
-
-    # 4. Movement distance over time
-    print("4️⃣  Visualizing movement distance metric...")
-    fig4 = plot_movement_distance(tracker, initial_prototypes.cpu())
-    if fig4:
-        plt.savefig('04_distance.png', dpi=150, bbox_inches='tight')
-        print("   ✓ Saved: 04_distance.png\n")
-
-    # 5. Training metrics
-    print("5️⃣  Plotting training metrics...")
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-
-    axes[0].plot(history['epoch'], history['loss'], 'o-', linewidth=2, markersize=6)
-    axes[0].set_xlabel('Epoch'); axes[0].set_ylabel('Loss')
-    axes[0].set_title('Training Loss'); axes[0].grid(True, alpha=0.3)
-
-    axes[1].plot(history['epoch'], history['r@1'], 'o-', linewidth=2, markersize=6)
-    axes[1].set_xlabel('Epoch'); axes[1].set_ylabel('Recall@1')
-    axes[1].set_title('Recall@1'); axes[1].grid(True, alpha=0.3)
-
-    axes[2].plot(history['epoch'], history['r@2'], 'o-', linewidth=2, markersize=6)
-    axes[2].set_xlabel('Epoch'); axes[2].set_ylabel('Recall@2')
-    axes[2].set_title('Recall@2'); axes[2].grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    plt.savefig('05_training_metrics.png', dpi=150, bbox_inches='tight')
-    print("   ✓ Saved: 05_training_metrics.png\n")
-
-    print("="*70)
-    print("✅ ALL VISUALIZATIONS COMPLETE!")
-    print("="*70)
-    print("\n📊 Generated files:")
-    print("   • 01_initialization.png - Initial random prototypes")
-    print("   • 02_movement.png      - Prototype movement arrows")
-    print("   • 03_trajectory.png    - Evolution over epochs")
-    print("   • 04_distance.png      - L2 distance metric")
-    print("   • 05_training_metrics.png - Loss & Recall@K\n")
+if __name__ == '__main__':
+    main()
