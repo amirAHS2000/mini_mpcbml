@@ -2,9 +2,9 @@ MODEL:
   BACKBONE:
     NAME: simple_embedding_net
     INPUT_DIM: 2
-    OUTPUT_DIM: 64
+    OUTPUT_DIM: 2
   HEAD:
-    DIM: 64
+    DIM: 2
 
 SOLVER:
   OPTIMIZER_NAME: Adam

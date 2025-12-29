@@ -18,56 +18,76 @@ class VisualizationLogger:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
-    # TODO: change this function in a way that it plot the recalls like what we did in original implementation (training recall vs. val recall)
     def plot_training_metrics(self, history: dict, filename: str = 'metrics.png') -> None:
         """
-        Plot training metrics (loss and recall curves).
-        
-        Args:
-            history: Dictionary with keys 'epoch', 'loss', 'r@1', 'r@2', 'r@4', 'r@8'
-            filename: Output filename
+        Plot training metrics:
+        - Loss
+        - Train vs Val Recall@1
+        - Train vs Val Recall@2 & @4
+        - All Recalls (Train vs Val)
+        Expected keys:
+        'epoch', 'loss',
+        'train_r@1', 'train_r@2', 'train_r@4', 'train_r@8',
+        'val_r@1',   'val_r@2',   'val_r@4',   'val_r@8'
         """
         fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        
-        # Loss curve
-        axes[0, 0].plot(history['epoch'], history['loss'], 'o-', linewidth=2, markersize=6)
+
+        epochs = history['epoch']
+
+        # 1) Loss (train loss only)
+        axes[0, 0].plot(epochs, history['loss'], 'o-', linewidth=2, markersize=6)
         axes[0, 0].set_xlabel('Epoch', fontsize=12)
         axes[0, 0].set_ylabel('Loss', fontsize=12)
         axes[0, 0].set_title('Training Loss', fontsize=13, fontweight='bold')
         axes[0, 0].grid(True, alpha=0.3)
-        
-        # Recall@1
-        axes[0, 1].plot(history['epoch'], history['r@1'], 'o-', linewidth=2, markersize=6, color='green')
+
+        # 2) Recall@1: Train vs Val
+        axes[0, 1].plot(epochs, history['train_r@1'], 'o-', linewidth=2, markersize=6,
+                        color='blue', label='Train R@1')
+        axes[0, 1].plot(epochs, history['val_r@1'], 's--', linewidth=2, markersize=6,
+                        color='orange', label='Val R@1')
         axes[0, 1].set_xlabel('Epoch', fontsize=12)
         axes[0, 1].set_ylabel('Recall@1', fontsize=12)
-        axes[0, 1].set_title('Recall@1', fontsize=13, fontweight='bold')
+        axes[0, 1].set_title('Recall@1 (Train vs Val)', fontsize=13, fontweight='bold')
+        axes[0, 1].legend()
         axes[0, 1].grid(True, alpha=0.3)
-        
-        # Recall@2 & @4
-        axes[1, 0].plot(history['epoch'], history['r@2'], 'o-', linewidth=2, markersize=6, label='Recall@2')
-        axes[1, 0].plot(history['epoch'], history['r@4'], 's-', linewidth=2, markersize=6, label='Recall@4')
+
+        # 3) Recall@2 & @4: Train vs Val
+        axes[1, 0].plot(epochs, history['train_r@2'], 'o-', linewidth=2, markersize=6,
+                        label='Train R@2')
+        axes[1, 0].plot(epochs, history['val_r@2'], 'o--', linewidth=2, markersize=6,
+                        label='Val R@2')
+        axes[1, 0].plot(epochs, history['train_r@4'], 's-', linewidth=2, markersize=6,
+                        label='Train R@4')
+        axes[1, 0].plot(epochs, history['val_r@4'], 's--', linewidth=2, markersize=6,
+                        label='Val R@4')
         axes[1, 0].set_xlabel('Epoch', fontsize=12)
         axes[1, 0].set_ylabel('Recall', fontsize=12)
-        axes[1, 0].set_title('Recall@K', fontsize=13, fontweight='bold')
+        axes[1, 0].set_title('Recall@2 & Recall@4', fontsize=13, fontweight='bold')
         axes[1, 0].legend()
         axes[1, 0].grid(True, alpha=0.3)
-        
-        # All Recalls
-        axes[1, 1].plot(history['epoch'], history['r@1'], 'o-', linewidth=2, markersize=6, label='R@1')
-        axes[1, 1].plot(history['epoch'], history['r@2'], 's-', linewidth=2, markersize=6, label='R@2')
-        axes[1, 1].plot(history['epoch'], history['r@4'], '^-', linewidth=2, markersize=6, label='R@4')
-        axes[1, 1].plot(history['epoch'], history['r@8'], 'D-', linewidth=2, markersize=6, label='R@8')
+
+        # 4) All Recalls: Train vs Val
+        axes[1, 1].plot(epochs, history['train_r@1'], 'o-',  linewidth=2, markersize=6, label='Train R@1')
+        axes[1, 1].plot(epochs, history['val_r@1'],   'o--', linewidth=2, markersize=6, label='Val R@1')
+        axes[1, 1].plot(epochs, history['train_r@2'], 's-',  linewidth=2, markersize=6, label='Train R@2')
+        axes[1, 1].plot(epochs, history['val_r@2'],   's--', linewidth=2, markersize=6, label='Val R@2')
+        axes[1, 1].plot(epochs, history['train_r@4'], '^-',  linewidth=2, markersize=6, label='Train R@4')
+        axes[1, 1].plot(epochs, history['val_r@4'],   '^--', linewidth=2, markersize=6, label='Val R@4')
+        axes[1, 1].plot(epochs, history['train_r@8'], 'D-',  linewidth=2, markersize=6, label='Train R@8')
+        axes[1, 1].plot(epochs, history['val_r@8'],   'D--', linewidth=2, markersize=6, label='Val R@8')
         axes[1, 1].set_xlabel('Epoch', fontsize=12)
         axes[1, 1].set_ylabel('Recall', fontsize=12)
-        axes[1, 1].set_title('All Recall Metrics', fontsize=13, fontweight='bold')
+        axes[1, 1].set_title('All Recalls (Train vs Val)', fontsize=13, fontweight='bold')
         axes[1, 1].legend()
         axes[1, 1].grid(True, alpha=0.3)
-        
+
         plt.tight_layout()
         output_path = self.output_dir / filename
         plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        print(f"   ✓ Saved: {filename}")
+        print(f" ✓ Saved: {filename}")
         plt.close()
+
     
     def save_summary(self, history: dict, config_path: str, filename: str = 'summary.txt') -> None:
         """
@@ -85,11 +105,15 @@ class VisualizationLogger:
             f.write("="*50 + "\n\n")
             f.write(f"Config: {config_path}\n")
             f.write(f"Best Loss: {min(history['loss']):.6f}\n")
-            f.write(f"Final R@1: {history['r@1'][-1]:.4f}\n")
-            f.write(f"Final R@2: {history['r@2'][-1]:.4f}\n")
-            f.write(f"Final R@4: {history['r@4'][-1]:.4f}\n")
-            f.write(f"Final R@8: {history['r@8'][-1]:.4f}\n")
-        
+            f.write(f"Final Train R@1: {history['train_r@1'][-1]:.4f}\n")
+            f.write(f"Final Val   R@1: {history['val_r@1'][-1]:.4f}\n")
+            f.write(f"Final Train R@2: {history['train_r@2'][-1]:.4f}\n")
+            f.write(f"Final Val   R@2: {history['val_r@2'][-1]:.4f}\n")
+            f.write(f"Final Train R@4: {history['train_r@4'][-1]:.4f}\n")
+            f.write(f"Final Val   R@4: {history['val_r@4'][-1]:.4f}\n")
+            f.write(f"Final Train R@8: {history['train_r@8'][-1]:.4f}\n")
+            f.write(f"Final Val   R@8: {history['val_r@8'][-1]:.4f}\n")
+
         print(f"   ✓ Saved: {filename}")
     
     def print_results(self, history: dict) -> None:
@@ -101,10 +125,14 @@ class VisualizationLogger:
         """
         print(f"\n📊 Final Results:")
         print(f"   Best Loss:  {min(history['loss']):.6f}")
-        print(f"   Final R@1:  {history['r@1'][-1]:.4f}")
-        print(f"   Final R@2:  {history['r@2'][-1]:.4f}")
-        print(f"   Final R@4:  {history['r@4'][-1]:.4f}")
-        print(f"   Final R@8:  {history['r@8'][-1]:.4f}\n")
+        print(f" Final Train R@1: {history['train_r@1'][-1]:.4f}")
+        print(f" Final Val   R@1: {history['val_r@1'][-1]:.4f}")
+        print(f" Final Train R@2: {history['train_r@2'][-1]:.4f}")
+        print(f" Final Val   R@2: {history['val_r@2'][-1]:.4f}")
+        print(f" Final Train R@4: {history['train_r@4'][-1]:.4f}")
+        print(f" Final Val   R@4: {history['val_r@4'][-1]:.4f}")
+        print(f" Final Train R@8: {history['train_r@8'][-1]:.4f}")
+        print(f" Final Val   R@8: {history['val_r@8'][-1]:.4f}")
         
         print(f"📁 Output saved to: {self.output_dir}\n")
 

@@ -1,5 +1,4 @@
 import torch
-import torch.optim as optim
 from torch.utils.data import DataLoader
 from sklearn.model_selection import train_test_split
 import argparse
@@ -13,8 +12,7 @@ from modeling.backbone.simple_embedding_net import EmbeddingNet
 from losses.mpcbml_loss import MpcbmlLoss
 from data.evaluation.retrieval_metric import compute_recall_at_k
 from utils.prototype_tracker import PrototypeTracker
-from utils.prototype_logger import plot_prototype_initialization
-from solver.build_optimizer import build_optimizer, build_lr_scheduler, print_optimizer_config
+from solver.build_optimizer import build_optimizer
 from utils.visualization_logger import VisualizationLogger, save_prototypes_visualization
 from utils.prototype_initializer_factory import PrototypeInitializerFactory
 
@@ -142,7 +140,7 @@ def main():
         embed_dim=EMBED_DIM,
         device=DEVICE
     )
-    # TODO: Call the function from loss function class to set the initial value of prototypes
+    criterion.set_prototypes_and_weights(initial_prototypes, cluster_sizes)
     
     print(f"✓ Prototypes initialized with '{init_method}' method")
     print(f"✓ Shape: {initial_prototypes.shape}\n")
@@ -153,14 +151,11 @@ def main():
     
     # ====================================================================
     # OPTIMIZER & SCHEDULER SETUP
-    # ====================================================================
-    print_banner("OPTIMIZER & SCHEDULER SETUP")
-    
+    # ==================================================================== 
+    print_banner("OPTIMIZER SETUP")
+   
     optimizer_main, optimizer_weights = build_optimizer(cfg, model, criterion)
-    scheduler_main, scheduler_weights = build_lr_scheduler(cfg, optimizer_main, optimizer_weights)
-    
-    print_optimizer_config(optimizer_main, optimizer_weights)
-    
+        
     # ====================================================================
     # TRAINING LOOP
     # ====================================================================
@@ -169,10 +164,14 @@ def main():
     history = {
         'epoch': [],
         'loss': [],
-        'r@1': [],
-        'r@2': [],
-        'r@4': [],
-        'r@8': []
+        'train_r@1': [],
+        'train_r@2': [],
+        'train_r@4': [],
+        'train_r@8': [],
+        'val_r@1': [],
+        'val_r@2': [],
+        'val_r@4': [],
+        'val_r@8': [],
     }
     
     for epoch in range(EPOCHS):
@@ -202,25 +201,32 @@ def main():
             total_loss += loss.item()
         
         tracker.record(criterion.prototypes, epoch=epoch+1)
-        
-        scheduler_main.step()
-        if scheduler_weights is not None:
-            scheduler_weights.step()
-        
-        # Evaluation phase
+
         model.eval()
         with torch.no_grad():
-            test_embs, test_targs = [], []
+            train_embs, train_targs = [], []
+            for bx, by in train_loader:
+                train_embs.append(model(bx.to(DEVICE)))
+                train_targs.append(by.to(DEVICE))
+            train_embs = torch.cat(train_embs)
+            train_targs = torch.cat(train_targs)
+
+            train_recalls = compute_recall_at_k(
+                train_embs, train_targs,
+                k_values=tuple(cfg.VALIDATION.RECALL_K)
+            )
+
+            val_embs, val_targs = [], []
             for bx, by in test_loader:
-                test_embs.append(model(bx.to(DEVICE)))
-                test_targs.append(by.to(DEVICE))
+                val_embs.append(model(bx.to(DEVICE)))
+                val_targs.append(by.to(DEVICE))
             
-            test_embs = torch.cat(test_embs)
-            test_targs = torch.cat(test_targs)
+            val_embs = torch.cat(val_embs)
+            val_targs = torch.cat(val_targs)
             
-            recalls = compute_recall_at_k(
-                test_embs,
-                test_targs,
+            val_recalls = compute_recall_at_k(
+                val_embs,
+                val_targs,
                 k_values=tuple(cfg.VALIDATION.RECALL_K)
             )
             stats = criterion.get_last_stats()
@@ -228,17 +234,23 @@ def main():
         # Store metrics
         history['epoch'].append(epoch+1)
         history['loss'].append(total_loss / len(train_loader))
-        history['r@1'].append(recalls['R@1'])
-        history['r@2'].append(recalls['R@2'])
-        history['r@4'].append(recalls['R@4'])
-        history['r@8'].append(recalls['R@8'])
-        
+        history['train_r@1'].append(train_recalls['R@1'])
+        history['train_r@2'].append(train_recalls['R@2'])
+        history['train_r@4'].append(train_recalls['R@4'])
+        history['train_r@8'].append(train_recalls['R@8'])
+        history['val_r@1'].append(val_recalls['R@1'])
+        history['val_r@2'].append(val_recalls['R@2'])
+        history['val_r@4'].append(val_recalls['R@4'])
+        history['val_r@8'].append(val_recalls['R@8'])
+
         # Print progress
         if (epoch + 1) % cfg.VALIDATION.VERBOSE == 0:
             proto_mvmt = stats.get('proto_movement_mean', 0) if stats else 0
             print(f"Epoch {epoch+1:03d}/{EPOCHS} | "
                   f"Loss: {total_loss/len(train_loader):.4f} | "
-                  f"R@1: {recalls['R@1']:.4f}")
+                  f"Train R@1: {train_recalls['R@1']:.4f} | "
+                  f"Val R@1: {val_recalls['R@1']:.4f}")
+
     
     print("\n✓ Training complete!\n")
     

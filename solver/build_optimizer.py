@@ -1,6 +1,4 @@
-import torch
 import torch.optim as optim
-from types import SimpleNamespace
 
 
 def build_optimizer(cfg, model, criterion=None):
@@ -99,60 +97,3 @@ def build_optimizer(cfg, model, criterion=None):
     )
     
     return optimizer_main, optimizer_weights
-
-
-def build_lr_scheduler(cfg, optimizer_main, optimizer_weights=None):
-    """
-    Build learning rate schedulers for both optimizers.
-    
-    Args:
-        cfg: Configuration object with scheduler settings
-        optimizer_main: Main optimizer (Adam)
-        optimizer_weights: Weights optimizer (SGD, optional)
-    
-    Returns:
-        scheduler_main: Learning rate scheduler for main optimizer
-        scheduler_weights: Learning rate scheduler for weights optimizer (or None)
-    """
-    
-    # ================================================================
-    # Scheduler for main optimizer (network + prototypes + temperature)
-    # ================================================================
-    scheduler_type = cfg.get('scheduler_type', 'cosine')
-    epochs = cfg.get('epochs', 20)
-    
-    if scheduler_type == 'cosine':
-        eta_min = cfg.get('eta_min_ratio', 0.01)
-        scheduler_main = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer_main,
-            T_max=epochs,
-            eta_min=optimizer_main.defaults['lr'] * eta_min
-        )
-    else:
-        # Fallback to step scheduler
-        scheduler_main = optim.lr_scheduler.StepLR(
-            optimizer_main,
-            step_size=epochs // 3,
-            gamma=0.1
-        )
-    
-    # ================================================================
-    # Scheduler for weights optimizer (if exists)
-    # ================================================================
-    scheduler_weights = None
-    if optimizer_weights is not None:
-        if scheduler_type == 'cosine':
-            eta_min = cfg.get('eta_min_ratio', 0.01)
-            scheduler_weights = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer_weights,
-                T_max=epochs,
-                eta_min=optimizer_weights.defaults['lr'] * eta_min
-            )
-        else:
-            scheduler_weights = optim.lr_scheduler.StepLR(
-                optimizer_weights,
-                step_size=epochs // 3,
-                gamma=0.1
-            )
-    
-    return scheduler_main, scheduler_weights
