@@ -20,7 +20,7 @@ def build_optimizer(cfg, model, criterion=None):
     """
     
     params = []
-    base_lr = cfg.get('base_lr', 0.001)
+    base_lr = getattr(cfg, 'base_lr', 0.001)
     
     # ================================================================
     # Add model parameters to Adam
@@ -76,8 +76,8 @@ def build_optimizer(cfg, model, criterion=None):
         # ================================================================
         if is_mpcbml and hasattr(criterion, 'weights'):
             # SGD with separate learning rate configuration
-            weight_lr = cfg.get('weight_lr', 0.0001)
-            weight_momentum = cfg.get('weight_momentum', 0.9)
+            weight_lr = getattr(cfg, 'weight_lr', 0.0001)
+            weight_momentum = getattr(cfg, 'weight_momentum', 0.9)
             
             optimizer_weights = optim.SGD(
                 [{"params": [criterion.weights]}],
@@ -89,7 +89,7 @@ def build_optimizer(cfg, model, criterion=None):
     # ================================================================
     # Build main optimizer (Adam) for network + most loss params
     # ================================================================
-    weight_decay = cfg.get('weight_decay', 0.0)
+    weight_decay = getattr(cfg, 'weight_decay', 0.0)
     
     optimizer_main = optim.Adam(
         params,

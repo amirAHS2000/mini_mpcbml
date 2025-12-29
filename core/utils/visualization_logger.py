@@ -173,7 +173,7 @@ def save_prototypes_visualization(
     output_path.mkdir(parents=True, exist_ok=True)
     
     # Import visualization functions (from utils.prototype_logger)
-    from utils.prototype_logger import (
+    from core.utils.prototype_logger import (
         plot_prototype_initialization,
         plot_prototype_movement,
         plot_prototype_trajectory,

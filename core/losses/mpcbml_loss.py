@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils.mpcbml_logger import compute_statistics
+from core.utils.mpcbml_logger import compute_statistics
 
 
 class MpcbmlLoss(nn.Module):
