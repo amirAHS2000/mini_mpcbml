@@ -22,6 +22,17 @@ def print_banner(text: str):
     print(f"🚀 {text}")
     print("="*70 + "\n")
 
+def compute_train_embeddings(model, train_loader, device):
+    model.eval()
+    all_feats, all_labels = [], []
+    with torch.no_grad():
+        for x, y in train_loader:
+            x = x.to(device)
+            feats = model(x)          # [B, 2]
+            all_feats.append(feats.cpu())
+            all_labels.append(y.cpu())
+    return torch.cat(all_feats, dim=0), torch.cat(all_labels, dim=0)
+
 
 def main():
     # ====================================================================
@@ -259,6 +270,8 @@ def main():
     print_banner("GENERATING VISUALIZATIONS")
     
     final_prototypes = criterion.prototypes.detach().cpu()
+
+    X_embed, y_embed = compute_train_embeddings(model, train_loader, DEVICE)
     
     # Save prototype visualizations (if enabled in config)
     viz_config = getattr(cfg, 'VISUALIZATION', None)
@@ -267,8 +280,8 @@ def main():
             output_dir=output_dir,
             initial_prototypes=initial_prototypes,
             final_prototypes=final_prototypes,
-            X_train=X_train,
-            y_train=y_train,
+            X_train=X_embed,
+            y_train=y_embed,
             n_classes=N_CLASSES,
             tracker=tracker,
             save_initialization=getattr(viz_config, 'SAVE_INITIALIZATION', True),
