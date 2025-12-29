@@ -5,7 +5,6 @@ import argparse
 from pathlib import Path
 
 from utils.config import load_config
-
 from data.base_dataset import SimpleDataset
 from data.data_generator import SyntheticGaussianMixture
 from modeling.backbone.simple_embedding_net import EmbeddingNet
