@@ -177,7 +177,8 @@ def save_prototypes_visualization(
         plot_prototype_initialization,
         plot_prototype_movement,
         plot_prototype_trajectory,
-        plot_movement_distance
+        plot_movement_distance,
+        plot_data_and_prototypes,
     )
     
     print("\n" + "="*70)
@@ -238,5 +239,28 @@ def save_prototypes_visualization(
             plt.savefig(output_path / '04_distance.png', dpi=150, bbox_inches='tight')
             print("   ✓ Saved: 04_distance.png")
             plt.close()
-    
+
+        # 5. Data + prototypes for multiple epochs (initial + selected)
+    if tracker is not None:
+        # choose which epochs to visualize
+        epochs_to_plot = [0, 1, 5, 10, 15, 20, 30, 40, 50]
+        for ep in epochs_to_plot:
+            if ep in tracker.epoch_numbers:
+                idx = tracker.epoch_numbers.index(ep)
+                protos_ep = tracker.history[idx]   # [C, K, D]
+                fig_ep = plot_data_and_prototypes(
+                    X_train=X_train,
+                    y_train=y_train,
+                    protos=protos_ep,
+                    n_classes=n_classes,
+                    title=f"Epoch {ep}"
+                )
+                if fig_ep:
+                    plt.savefig(
+                        output_path / f"epoch_{ep:03d}_data_protos.png",
+                        dpi=150, bbox_inches='tight'
+                    )
+                    print(f" ✓ Saved: epoch_{ep:03d}_data_protos.png")
+                    plt.close()
+
     print()

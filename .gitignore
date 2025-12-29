@@ -1,0 +1,74 @@
+# -------------------------
+# Python bytecode / cache
+# -------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# -------------------------
+# Virtual envs
+# -------------------------
+.env
+.venv
+venv/
+ENV/
+env/
+.ipynb_checkpoints/
+
+# -------------------------
+# Build / packaging
+# -------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# -------------------------
+# Editor / IDE
+# -------------------------
+.vscode/
+.idea/
+
+# -------------------------
+# OS files
+# -------------------------
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# Project outputs & logs
+# -------------------------
+outputs/
+logs/
+runs/
+tensorboard/
+events.out.tfevents.*
+
+# Saved models / checkpoints
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# -------------------------
+# Data
+# -------------------------
+data/
+datasets/
+*.npz
+*.npy
+*.csv
+
+# -------------------------
+# Plots & generated figures
+# -------------------------
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# -------------------------
+# Colab / notebook extras
+# -------------------------
+*.ipynb
+.colab/

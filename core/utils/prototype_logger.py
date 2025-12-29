@@ -4,6 +4,56 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 
+def plot_data_and_prototypes(X_train, y_train, protos, n_classes=4, title=""):
+    """
+    Plot data distribution + prototypes for a given epoch (2D only).
+
+    X_train: [N, 2] tensor or numpy (on CPU)
+    y_train: [N]
+    protos:  [C, K, 2] tensor (on CPU)
+    """
+    if protos.shape[-1] != 2:
+        print(f"⚠️ Skipping 2D visualization: embedding dim {protos.shape[-1]} != 2")
+        return None
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import torch
+
+    if isinstance(X_train, torch.Tensor):
+        X_np = X_train.cpu().numpy()
+        y_np = y_train.cpu().numpy()
+    else:
+        X_np, y_np = X_train, y_train
+
+    C, K = protos.shape[0], protos.shape[1]
+    colors = plt.cm.Set1(np.linspace(0, 1, n_classes))
+
+    fig, ax = plt.subplots(figsize=(5, 5))
+    ax.set_title(title, fontsize=12, fontweight='bold')
+    ax.set_xlabel('Dim 1')
+    ax.set_ylabel('Dim 2')
+    ax.grid(True, alpha=0.3)
+
+    # Data clusters
+    for c in range(n_classes):
+        class_data = X_np[y_np == c]
+        ax.scatter(class_data[:, 0], class_data[:, 1],
+                   alpha=0.15, s=10, color=colors[c])
+
+    # Prototypes
+    protos_np = protos.cpu().numpy()
+    for c in range(C):
+        for k in range(K):
+            p = protos_np[c, k]
+            ax.scatter(p[0], p[1], s=200, marker='*',
+                       color=colors[c], edgecolors='black', linewidth=2)
+
+    ax.set_aspect('equal')
+    plt.tight_layout()
+    return fig
+
+
 def plot_prototype_initialization(initial_random, initial_kmeans=None,
                                    X_train=None, y_train=None, n_classes=4):
     """
@@ -33,7 +83,7 @@ def plot_prototype_initialization(initial_random, initial_kmeans=None,
 
     # Plot 1: Random Initialization
     ax = axes[plot_idx]
-    ax.set_title('🎲 Random Initialization (Start)', fontsize=14, fontweight='bold')
+    ax.set_title('Initial Prototypes (Embedding Space)', fontsize=14, fontweight='bold')
     ax.set_xlabel('Dim 1')
     ax.set_ylabel('Dim 2')
     ax.grid(True, alpha=0.3)

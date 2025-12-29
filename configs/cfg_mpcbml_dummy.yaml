@@ -8,11 +8,11 @@ MODEL:
 
 SOLVER:
   OPTIMIZER_NAME: Adam
-  BASE_LR: 0.001
+  BASE_LR: 0.0001
   WEIGHT_LR: 0.0001
   WEIGHT_MOMENTUM: 0.9
   WEIGHT_DECAY: 0.0
-  MAX_EPOCHS: 20
+  MAX_EPOCHS: 50
   SCHEDULER_TYPE: cosine
   ETA_MIN_RATIO: 0.01
   WARMUP_ITERS: 0
@@ -21,12 +21,12 @@ LOSSES:
   NAME: mpcbml_loss
   MPCBML_LOSS:
     # Options: 'random', 'kmeans', 'mean'
-    INIT_METHOD: kmeans
+    INIT_METHOD: random
     N_CLASSES: 4
     PROTOTYPE_PER_CLASS: 3
     MA_MOMENTUM: 0.9
-    GAMMA_REG: 0.5
-    LAMBDA_REG: 0.1
+    GAMMA_REG: 0.2
+    LAMBDA_REG: 0.01
     THETA_IS_LEARNABLE: False
     INIT_THETA: 1.0
 
