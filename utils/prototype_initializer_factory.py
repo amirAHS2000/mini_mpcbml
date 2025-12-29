@@ -1,8 +1,7 @@
 import torch
 import numpy as np
 from sklearn.cluster import KMeans
-from typing import Tuple, Callable, Dict, Optional
-from types import SimpleNamespace
+from typing import Tuple, Callable, Optional
 
 
 class PrototypeInitializerFactory:
@@ -338,7 +337,6 @@ class PrototypeInitializerFactory:
         return list(self.methods.keys())
 
 
-# Convenience function (like original initialize_mpcbml)
 def initialize_mpcbml(
     model: torch.nn.Module,
     train_loader,

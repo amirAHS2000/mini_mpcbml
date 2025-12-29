@@ -1,13 +1,11 @@
 import matplotlib.pyplot as plt
 from pathlib import Path
-from types import SimpleNamespace
 import torch
 
 
 class VisualizationLogger:
     """
     Manages all visualization and logging during training.
-    Separates visualization logic from training loop.
     """
     
     def __init__(self, output_dir: str):
@@ -20,6 +18,7 @@ class VisualizationLogger:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
+    # TODO: change this function in a way that it plot the recalls like what we did in original implementation (training recall vs. val recall)
     def plot_training_metrics(self, history: dict, filename: str = 'metrics.png') -> None:
         """
         Plot training metrics (loss and recall curves).

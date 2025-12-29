@@ -1,6 +1,3 @@
-# main_updated.py - USING NEW PLUGINS (Visualization Logger + Prototype Initializer Factory)
-# Shows how to integrate the new modular systems
-
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
@@ -145,6 +142,7 @@ def main():
         embed_dim=EMBED_DIM,
         device=DEVICE
     )
+    # TODO: Call the function from loss function class to set the initial value of prototypes
     
     print(f"✓ Prototypes initialized with '{init_method}' method")
     print(f"✓ Shape: {initial_prototypes.shape}\n")
