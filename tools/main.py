@@ -4,16 +4,16 @@ from sklearn.model_selection import train_test_split
 import argparse
 from pathlib import Path
 
-from utils.config import load_config
-from data.base_dataset import SimpleDataset
-from data.data_generator import SyntheticGaussianMixture
-from modeling.backbone.simple_embedding_net import EmbeddingNet
-from losses.mpcbml_loss import MpcbmlLoss
-from data.evaluation.retrieval_metric import compute_recall_at_k
-from utils.prototype_tracker import PrototypeTracker
-from solver.build_optimizer import build_optimizer
-from utils.visualization_logger import VisualizationLogger, save_prototypes_visualization
-from utils.prototype_initializer_factory import PrototypeInitializerFactory
+from core.utils.config import load_config
+from core.data.base_dataset import SimpleDataset
+from core.data.data_generator import SyntheticGaussianMixture
+from core.modeling.backbone.simple_embedding_net import EmbeddingNet
+from core.losses.mpcbml_loss import MpcbmlLoss
+from core.data.evaluation.retrieval_metric import compute_recall_at_k
+from core.utils.prototype_tracker import PrototypeTracker
+from core.solver.build_optimizer import build_optimizer
+from core.utils.visualization_logger import VisualizationLogger, save_prototypes_visualization
+from core.utils.prototype_initializer_factory import PrototypeInitializerFactory
 
 
 def print_banner(text: str):
