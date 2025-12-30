@@ -2,13 +2,13 @@ MODEL:
   BACKBONE:
     NAME: simple_embedding_net
     INPUT_DIM: 2
-    OUTPUT_DIM: 2
+    OUTPUT_DIM: 64
   HEAD:
-    DIM: 2
+    DIM: 64
 
 SOLVER:
   OPTIMIZER_NAME: Adam
-  BASE_LR: 0.0001
+  BASE_LR: 0.001
   WEIGHT_LR: 0.0001
   WEIGHT_MOMENTUM: 0.9
   WEIGHT_DECAY: 0.0
@@ -22,7 +22,7 @@ LOSSES:
   MPCBML_LOSS:
     # Options: 'random', 'kmeans', 'mean'
     INIT_METHOD: random
-    N_CLASSES: 4
+    N_CLASSES: 15
     PROTOTYPE_PER_CLASS: 3
     MA_MOMENTUM: 0.9
     GAMMA_REG: 0.2
@@ -32,10 +32,12 @@ LOSSES:
 
 DATA:
   DATASET_NAME: synthetic_gaussian
+  N_CLASSES_TOTAL: 20      # ← Total classes on circle
+  N_CLASSES_TRAIN: 15      # ← Train on 15 classes
   N_SAMPLES: 3000
   TRAIN_BATCHSIZE: 128
   TEST_BATCHSIZE: 128
-  TEST_SPLIT: 0.2
+  TEST_SPLIT: 0.2          # (unused now, but keep for safety)
   NUM_WORKERS: 0
 
 VALIDATION:

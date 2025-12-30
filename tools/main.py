@@ -28,7 +28,7 @@ def compute_train_embeddings(model, train_loader, device):
     with torch.no_grad():
         for x, y in train_loader:
             x = x.to(device)
-            feats = model(x)          # [B, 2]
+            feats = model(x)          # [B, embed_dim]
             all_feats.append(feats.cpu())
             all_labels.append(y.cpu())
     return torch.cat(all_feats, dim=0), torch.cat(all_labels, dim=0)
@@ -71,7 +71,7 @@ def main():
     EPOCHS = cfg.SOLVER.MAX_EPOCHS
     
     # ====================================================================
-    # 🆕 VISUALIZATION LOGGER SETUP
+    # VISUALIZATION LOGGER SETUP
     # ====================================================================
     print_banner("INITIALIZING VISUALIZATION SYSTEM")
     
@@ -85,33 +85,37 @@ def main():
     # ====================================================================
     print_banner("DATA PREPARATION")
     
-    print("Generating synthetic dataset...")
+    print("Generating synthetic dataset with train/test class split...")
+
     gen = SyntheticGaussianMixture(
-        n_classes=N_CLASSES,
+        n_classes_total=getattr(cfg.DATA, 'N_CLASSES_TOTAL', 20),
+        n_classes_train=getattr(cfg.DATA, 'N_CLASSES_TRAIN', 15),
         modes_per_class=K_PROTOS,
-        n_samples=cfg.DATA.N_SAMPLES
+        n_samples=getattr(cfg.DATA, 'N_SAMPLES', 3000)
     )
-    X, y = gen.generate()
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
-        test_size=cfg.DATA.TEST_SPLIT,
-        stratify=y
-    )
-    
+
+    X_train, y_train, X_test, y_test = gen.generate(return_split=True)
+
+    N_CLASSES = gen.n_classes_train
+
     train_loader = DataLoader(
         SimpleDataset(X_train, y_train),
         batch_size=BATCH_SIZE,
         shuffle=True,
-        num_workers=cfg.DATA.NUM_WORKERS
+        num_workers=getattr(cfg.DATA, 'NUM_WORKERS', 0)
     )
+
     test_loader = DataLoader(
         SimpleDataset(X_test, y_test),
-        batch_size=cfg.DATA.TEST_BATCHSIZE,
+        batch_size=getattr(cfg.DATA, 'TEST_BATCHSIZE', 128),
         shuffle=False,
-        num_workers=cfg.DATA.NUM_WORKERS
+        num_workers=getattr(cfg.DATA, 'NUM_WORKERS', 0)
     )
-    
-    print(f"✓ Dataset created: {len(X_train)} training, {len(X_test)} test\n")
+
+    print(f"✓ Total classes: {gen.n_classes_total}")
+    print(f"✓ Train classes (seen): {gen.n_classes_train}")
+    print(f"✓ Test classes (unseen): {gen.n_classes_test}")
+    print(f"✓ Train samples: {len(X_train)}, Test samples: {len(X_test)}\n")
     
     # ====================================================================
     # MODEL INITIALIZATION
@@ -127,7 +131,7 @@ def main():
     print(f"✓ Model initialized\n")
     
     # ====================================================================
-    # 🆕 PROTOTYPE INITIALIZATION WITH FACTORY PATTERN
+    # PROTOTYPE INITIALIZATION WITH FACTORY PATTERN
     # ====================================================================
     print_banner("PROTOTYPE INITIALIZATION")
     
@@ -170,7 +174,6 @@ def main():
     # TRAINING LOOP
     # ====================================================================
     print_banner("STARTING TRAINING")
-    
     history = {
         'epoch': [],
         'loss': [],
@@ -183,35 +186,35 @@ def main():
         'val_r@4': [],
         'val_r@8': [],
     }
-    
+
     for epoch in range(EPOCHS):
         # Training phase
         model.train()
         criterion.train()
         total_loss = 0
-        
+
         for batch_x, batch_y in train_loader:
             batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
-            
             optimizer_main.zero_grad()
             if optimizer_weights is not None:
                 optimizer_weights.zero_grad()
-            
+
             embeddings = model(batch_x)
             loss = criterion(embeddings, batch_y)
             loss.backward()
-            
+
             if hasattr(criterion, 'constrained_weight_update'):
                 criterion.constrained_weight_update()
-            
+
             optimizer_main.step()
             if optimizer_weights is not None:
                 optimizer_weights.step()
-            
+
             total_loss += loss.item()
-        
+
         tracker.record(criterion.prototypes, epoch=epoch+1)
 
+        # Evaluation phase
         model.eval()
         with torch.no_grad():
             train_embs, train_targs = [], []
@@ -220,7 +223,6 @@ def main():
                 train_targs.append(by.to(DEVICE))
             train_embs = torch.cat(train_embs)
             train_targs = torch.cat(train_targs)
-
             train_recalls = compute_recall_at_k(
                 train_embs, train_targs,
                 k_values=tuple(cfg.VALIDATION.RECALL_K)
@@ -230,17 +232,16 @@ def main():
             for bx, by in test_loader:
                 val_embs.append(model(bx.to(DEVICE)))
                 val_targs.append(by.to(DEVICE))
-            
             val_embs = torch.cat(val_embs)
             val_targs = torch.cat(val_targs)
-            
             val_recalls = compute_recall_at_k(
                 val_embs,
                 val_targs,
                 k_values=tuple(cfg.VALIDATION.RECALL_K)
             )
-            stats = criterion.get_last_stats()
-        
+
+        stats = criterion.get_last_stats()
+
         # Store metrics
         history['epoch'].append(epoch+1)
         history['loss'].append(total_loss / len(train_loader))
@@ -255,33 +256,72 @@ def main():
 
         # Print progress
         if (epoch + 1) % cfg.VALIDATION.VERBOSE == 0:
-            proto_mvmt = stats.get('proto_movement_mean', 0) if stats else 0
             print(f"Epoch {epoch+1:03d}/{EPOCHS} | "
                   f"Loss: {total_loss/len(train_loader):.4f} | "
                   f"Train R@1: {train_recalls['R@1']:.4f} | "
                   f"Val R@1: {val_recalls['R@1']:.4f}")
 
-    
     print("\n✓ Training complete!\n")
     
     # ====================================================================
-    # 🆕 VISUALIZATIONS USING SEPARATED LOGGER
+    # VISUALIZATIONS USING SEPARATED LOGGER
     # ====================================================================
     print_banner("GENERATING VISUALIZATIONS")
-    
-    final_prototypes = criterion.prototypes.detach().cpu()
 
+    # Compute final embeddings (only once!)
+    final_prototypes = criterion.prototypes.detach().cpu()
     X_embed, y_embed = compute_train_embeddings(model, train_loader, DEVICE)
-    
-    # Save prototype visualizations (if enabled in config)
+
+    # ✅ FIX 1: Actually call UMAP visualization
+    print("1️⃣ Plotting embeddings with UMAP (initial & final)...")
+    proto_labels = torch.arange(N_CLASSES).repeat_interleave(K_PROTOS)
+
+    viz_logger.plot_embeddings_with_umap(
+        embeddings=X_embed,
+        labels=y_embed,
+        prototypes=initial_prototypes,
+        proto_labels=proto_labels,
+        title="Initial Prototypes (Training Embeddings - UMAP)",
+        filename="00_initial_umap.png"
+    )
+
+    viz_logger.plot_embeddings_with_umap(
+        embeddings=X_embed,
+        labels=y_embed,
+        prototypes=final_prototypes,
+        proto_labels=proto_labels,
+        title="Final Prototypes (Training Embeddings - UMAP)",
+        filename="06_final_umap.png"
+    )
+
+    # After final UMAP
+    checkpoint_epochs = [EPOCHS // 4, EPOCHS // 2, 3 * EPOCHS // 4]
+    checkpoint_epochs = [ep for ep in checkpoint_epochs if ep in tracker.epoch_numbers]
+
+    for ep in checkpoint_epochs:
+        idx = tracker.epoch_numbers.index(ep)
+        protos_at_ep = torch.from_numpy(tracker.history[idx]).float()
+        viz_logger.plot_embeddings_with_umap(
+            embeddings=X_embed,
+            labels=y_embed,
+            prototypes=protos_at_ep,
+            proto_labels=proto_labels,
+            title=f"Prototypes at Epoch {ep}/{EPOCHS} (UMAP)",
+            filename=f"07_checkpoint_epoch_{ep:03d}_umap.png"
+        )
+
+
+    # ✅ FIX 2: Correct numbering for prototype visualizations
+    print("\n2️⃣ Saving prototype visualizations (initialization, movement, trajectory, distance)...")
     viz_config = getattr(cfg, 'VISUALIZATION', None)
     if viz_config:
+        # ✅ FIX 3: Pass embedding space data, not input space
         save_prototypes_visualization(
             output_dir=output_dir,
             initial_prototypes=initial_prototypes,
             final_prototypes=final_prototypes,
-            X_train=X_embed,
-            y_train=y_embed,
+            X_train=X_embed,  # ← Now correctly in embedding space
+            y_train=y_embed,  # ← Labels (same as before)
             n_classes=N_CLASSES,
             tracker=tracker,
             save_initialization=getattr(viz_config, 'SAVE_INITIALIZATION', True),
@@ -289,13 +329,15 @@ def main():
             save_trajectory=getattr(viz_config, 'SAVE_TRAJECTORY', True),
             save_distance=getattr(viz_config, 'SAVE_DISTANCE', True)
         )
-    
-    # Save training metrics using logger
-    print("\n5️⃣  Plotting training metrics...")
+    else:
+        print("⚠️ VISUALIZATION config not found, skipping prototype visualizations")
+
+    # ✅ FIX 4: Correct numbering for metrics
+    print("\n5️⃣ Plotting training metrics...")
     viz_logger.plot_training_metrics(history, '05_metrics.png')
     
     # ====================================================================
-    # 🆕 SAVE RESULTS USING LOGGER
+    # SAVE RESULTS USING LOGGER
     # ====================================================================
     print_banner("SAVING RESULTS")
     

@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from pathlib import Path
 import torch
+import numpy as np
 
 
 class VisualizationLogger:
@@ -135,6 +136,80 @@ class VisualizationLogger:
         print(f" Final Val   R@8: {history['val_r@8'][-1]:.4f}")
         
         print(f"📁 Output saved to: {self.output_dir}\n")
+
+    def plot_embeddings_with_umap(self, embeddings, labels, prototypes=None,
+                                   proto_labels=None, title="Embeddings (UMAP)",
+                                   filename="embeddings_umap.png"):
+        """
+        Visualize high-dimensional embeddings using UMAP projection.
+        
+        Args:
+            embeddings: [N, embed_dim] tensor or array
+            labels: [N] class labels
+            prototypes: [K*M, embed_dim] prototype positions (optional)
+            proto_labels: [K*M] prototype class labels (optional)
+            title: Plot title
+            filename: Save filename
+        """
+        try:
+            import umap
+        except ImportError:
+            print("⚠️ UMAP not installed. Install with: pip install umap-learn")
+            return
+        
+        # Convert to numpy
+        if hasattr(embeddings, 'cpu'):
+            embeddings = embeddings.cpu().numpy()
+        embeddings = np.asarray(embeddings, dtype=np.float32)
+        labels = np.asarray(labels, dtype=np.int64)
+        
+        # Project to 2D
+        reducer = umap.UMAP(n_components=2, random_state=42, n_neighbors=15)
+        embeddings_2d = reducer.fit_transform(embeddings)
+        
+        # Plot
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Plot data points
+        scatter = ax.scatter(
+            embeddings_2d[:, 0], embeddings_2d[:, 1],
+            c=labels, cmap='tab20', alpha=0.6, s=20, label='Data'
+        )
+        
+        # Plot prototypes if provided
+        if prototypes is not None:
+            if hasattr(prototypes, 'cpu'):
+                prototypes = prototypes.cpu().numpy()
+            prototypes = np.asarray(prototypes, dtype=np.float32)
+            proto_labels = np.asarray(proto_labels, dtype=np.int64)
+            
+            # Project prototypes using same UMAP transform
+            # (Note: UMAP doesn't support direct projection of new points,
+            # so we'll refit with combined data for consistency)
+            combined = np.vstack([embeddings, prototypes])
+            combined_2d = reducer.fit_transform(combined)
+            
+            proto_2d = combined_2d[len(embeddings):]
+            
+            ax.scatter(
+                proto_2d[:, 0], proto_2d[:, 1],
+                c=proto_labels, cmap='tab20', marker='*', 
+                s=800, edgecolors='black', linewidths=2,
+                label='Prototypes', alpha=0.9
+            )
+        
+        ax.set_xlabel('UMAP 1', fontsize=12)
+        ax.set_ylabel('UMAP 2', fontsize=12)
+        ax.set_title(title, fontsize=14, fontweight='bold')
+        ax.legend(fontsize=10)
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+        plt.savefig(Path(self.output_dir) / filename, dpi=150, bbox_inches='tight')
+        plt.close()
+        
+        print(f"✓ Saved: {filename}")
 
 
 def save_prototypes_visualization(
