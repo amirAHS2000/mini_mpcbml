@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import torch
 import numpy as np
+from sklearn.manifold import TSNE
+
 
 
 class VisualizationLogger:
@@ -210,6 +212,57 @@ class VisualizationLogger:
         plt.close()
         
         print(f"✓ Saved: {filename}")
+
+    def plot_embeddings_with_tsne(
+        self,
+        embeddings: torch.Tensor,
+        labels: torch.Tensor,
+        prototypes: None,
+        proto_labels: None,
+        title: str = "t-SNE Embeddings with Prototypes",
+        filename: str = "tsne_embeddings.png",
+        perplexity: float = 30.0,
+        random_state: int = 42,
+    ):
+        embeddings = embeddings.cpu().numpy()
+        labels = labels.cpu().numpy()
+
+        tsne = TSNE(
+            n_components=2,
+            perplexity=perplexity,
+            init="pca",
+            learning_rate="auto",
+            random_state=random_state,
+        )
+        emb_2d = tsne.fit_transform(embeddings)
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.scatter(
+            emb_2d[:, 0], emb_2d[:, 1],
+            c=labels, cmap="tab20", alpha=0.6, s=20, label="Data"
+        )
+
+        if prototypes is not None:
+            protos = prototypes.cpu().numpy()
+            proto_labels = proto_labels.cpu().numpy()
+            all_data = np.vstack([embeddings, protos])
+            all_2d = tsne.fit_transform(all_data)
+            proto_2d = all_2d[len(embeddings):]
+
+            ax.scatter(
+                proto_2d[:, 0], proto_2d[:, 1],
+                c=proto_labels, cmap="tab20",
+                marker="*", s=800, edgecolors="black", linewidths=2,
+                label="Prototypes", alpha=0.9,
+            )
+
+        ax.set_title(title)
+        ax.legend()
+        plt.tight_layout()
+        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
+        plt.savefig(Path(self.output_dir) / filename, dpi=150, bbox_inches="tight")
+        plt.close()
+
 
 
 def save_prototypes_visualization(
