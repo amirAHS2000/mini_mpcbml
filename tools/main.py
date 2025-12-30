@@ -220,6 +220,40 @@ def main():
 
         tracker.record(criterion.prototypes, epoch=epoch+1)
 
+        # --- Visualization snapshots at selected epochs ---
+        snapshot_epochs = [0, EPOCHS // 4, EPOCHS // 2, 3 * EPOCHS // 4, EPOCHS]
+        current_epoch = epoch + 1
+
+        if current_epoch in snapshot_epochs:
+            model.eval()
+            with torch.no_grad():
+                # Compute full train embeddings for this epoch
+                X_embed, y_embed = compute_train_embeddings(model, train_loader, DEVICE)
+
+                # Current prototypes
+                protos_now = flatten_protos(criterion.prototypes.detach().cpu())
+                proto_labels = torch.arange(N_CLASSES).repeat_interleave(K_PROTOS)
+
+                # Decide filename/title per epoch
+                if current_epoch == 1:
+                    title = f"Epoch {current_epoch} (near init) - UMAP"
+                    fname = f"epoch_{current_epoch:03d}_umap.png"
+                elif current_epoch == EPOCHS:
+                    title = f"Epoch {current_epoch} (final) - UMAP"
+                    fname = f"epoch_{current_epoch:03d}_umap.png"
+                else:
+                    title = f"Epoch {current_epoch} - UMAP"
+                    fname = f"epoch_{current_epoch:03d}_umap.png"
+
+                viz_logger.plot_embeddings_with_umap(
+                    embeddings=X_embed,
+                    labels=y_embed,
+                    prototypes=protos_now,
+                    proto_labels=proto_labels,
+                    title=title,
+                    filename=fname,
+                )
+
         # Evaluation phase
         model.eval()
         with torch.no_grad():
@@ -245,6 +279,7 @@ def main():
                 val_targs,
                 k_values=tuple(cfg.VALIDATION.RECALL_K)
             )
+        
 
         stats = criterion.get_last_stats()
 
@@ -277,51 +312,6 @@ def main():
     # Compute final embeddings (only once!)
     final_prototypes = criterion.prototypes.detach().cpu()
     X_embed, y_embed = compute_train_embeddings(model, train_loader, DEVICE)
-
-    # ✅ UMAP for initial, checkpoints, final
-    print("1️⃣ Plotting embeddings with UMAP (initial, checkpoints & final)...")
-    proto_labels = torch.arange(N_CLASSES).repeat_interleave(K_PROTOS)  # [C*K]
-
-    # 1) Initial prototypes
-    init_protos_flat = flatten_protos(initial_prototypes.cpu())
-    viz_logger.plot_embeddings_with_umap(
-        embeddings=X_embed,
-        labels=y_embed,
-        prototypes=init_protos_flat,
-        proto_labels=proto_labels,
-        title="Initial Prototypes (Training Embeddings - UMAP)",
-        filename="00_initial_umap.png"
-    )
-
-    # 2) Final prototypes
-    final_protos_flat = flatten_protos(final_prototypes)
-    viz_logger.plot_embeddings_with_umap(
-        embeddings=X_embed,
-        labels=y_embed,
-        prototypes=final_protos_flat,
-        proto_labels=proto_labels,
-        title="Final Prototypes (Training Embeddings - UMAP)",
-        filename="06_final_umap.png"
-    )
-
-    # 3) Intermediate checkpoints
-    checkpoint_epochs = [EPOCHS // 4, EPOCHS // 2, 3 * EPOCHS // 4]
-    checkpoint_epochs = [ep for ep in checkpoint_epochs if ep in tracker.epoch_numbers]
-
-    for ep in checkpoint_epochs:
-        idx = tracker.epoch_numbers.index(ep)
-        protos_at_ep = tracker.history[idx]        # tensor, [C, K, D] or [C*K, D]
-        protos_at_ep_flat = flatten_protos(protos_at_ep)
-
-        viz_logger.plot_embeddings_with_umap(
-            embeddings=X_embed,
-            labels=y_embed,
-            prototypes=protos_at_ep_flat,
-            proto_labels=proto_labels,  # length C*K
-            title=f"Prototypes at Epoch {ep}/{EPOCHS} (UMAP)",
-            filename=f"07_checkpoint_epoch_{ep:03d}_umap.png"
-        )
-
 
     # ✅ FIX 2: Correct numbering for prototype visualizations
     print("\n2️⃣ Saving prototype visualizations (initialization, movement, trajectory, distance)...")
