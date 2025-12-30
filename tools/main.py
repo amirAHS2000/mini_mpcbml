@@ -33,6 +33,12 @@ def compute_train_embeddings(model, train_loader, device):
             all_labels.append(y.cpu())
     return torch.cat(all_feats, dim=0), torch.cat(all_labels, dim=0)
 
+# Helper: ensure prototypes are 2D [C*K, D]
+def flatten_protos(protos: torch.Tensor) -> torch.Tensor:
+    # protos can be [C, K, D] or [C*K, D]
+    if protos.dim() == 3:
+        return protos.view(-1, protos.shape[-1])
+    return protos
 
 def main():
     # ====================================================================
@@ -272,40 +278,46 @@ def main():
     final_prototypes = criterion.prototypes.detach().cpu()
     X_embed, y_embed = compute_train_embeddings(model, train_loader, DEVICE)
 
-    # ✅ FIX 1: Actually call UMAP visualization
-    print("1️⃣ Plotting embeddings with UMAP (initial & final)...")
-    proto_labels = torch.arange(N_CLASSES).repeat_interleave(K_PROTOS)
+    # ✅ UMAP for initial, checkpoints, final
+    print("1️⃣ Plotting embeddings with UMAP (initial, checkpoints & final)...")
+    proto_labels = torch.arange(N_CLASSES).repeat_interleave(K_PROTOS)  # [C*K]
 
+    # 1) Initial prototypes
+    init_protos_flat = flatten_protos(initial_prototypes.cpu())
     viz_logger.plot_embeddings_with_umap(
         embeddings=X_embed,
         labels=y_embed,
-        prototypes=initial_prototypes,
+        prototypes=init_protos_flat,
         proto_labels=proto_labels,
         title="Initial Prototypes (Training Embeddings - UMAP)",
         filename="00_initial_umap.png"
     )
 
+    # 2) Final prototypes
+    final_protos_flat = flatten_protos(final_prototypes)
     viz_logger.plot_embeddings_with_umap(
         embeddings=X_embed,
         labels=y_embed,
-        prototypes=final_prototypes,
+        prototypes=final_protos_flat,
         proto_labels=proto_labels,
         title="Final Prototypes (Training Embeddings - UMAP)",
         filename="06_final_umap.png"
     )
 
-    # After final UMAP
+    # 3) Intermediate checkpoints
     checkpoint_epochs = [EPOCHS // 4, EPOCHS // 2, 3 * EPOCHS // 4]
     checkpoint_epochs = [ep for ep in checkpoint_epochs if ep in tracker.epoch_numbers]
 
     for ep in checkpoint_epochs:
         idx = tracker.epoch_numbers.index(ep)
-        protos_at_ep = torch.from_numpy(tracker.history[idx]).float()
+        protos_at_ep = tracker.history[idx]        # tensor, [C, K, D] or [C*K, D]
+        protos_at_ep_flat = flatten_protos(protos_at_ep)
+
         viz_logger.plot_embeddings_with_umap(
             embeddings=X_embed,
             labels=y_embed,
-            prototypes=protos_at_ep,
-            proto_labels=proto_labels,
+            prototypes=protos_at_ep_flat,
+            proto_labels=proto_labels,  # length C*K
             title=f"Prototypes at Epoch {ep}/{EPOCHS} (UMAP)",
             filename=f"07_checkpoint_epoch_{ep:03d}_umap.png"
         )
