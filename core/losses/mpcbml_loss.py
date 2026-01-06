@@ -78,7 +78,7 @@ class MpcbmlLoss(nn.Module):
         self.prototypes.copy_(prototypes)
 
         # Save a frozen copy of the initial prototypes for monitoring
-        self.initial_prototypes = prototypes.detach().clone()
+        self.initial_prototypes = F.normalize(prototypes.detach(), p=2, dim=2)
 
         if cluster_sizes is not None and \
             cluster_sizes.shape == (self.num_classes, self.prototype_per_class):

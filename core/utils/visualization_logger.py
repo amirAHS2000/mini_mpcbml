@@ -8,6 +8,18 @@ import umap
 from sklearn.manifold import TSNE
 
 
+def _to_numpy_unit(x) -> np.ndarray:
+    if torch.is_tensor(x):
+        x = x.detach().cpu().float()
+    x = np.asarray(x, dtype=np.float32)
+
+    # Expect [N, D]
+    if x.ndim != 2:
+        raise ValueError(f"Expected [N, D], got shape {x.shape}")
+
+    n = np.linalg.norm(x, axis=1, keepdims=True) + 1e-12
+    return x / n
+
 class VisualizationLogger:
     """
     Manages all visualization and logging during training.
@@ -144,11 +156,12 @@ class VisualizationLogger:
         min_dist: float = 0.1,
         random_state: int = 42,
     ):
-        emb = np.asarray(embeddings)
+        emb = _to_numpy_unit(embeddings)
         y = np.asarray(labels)
 
+        proto = None
         if prototypes is not None:
-            proto = np.asarray(prototypes)
+            proto = _to_numpy_unit(prototypes)
             proto_y = np.asarray(proto_labels) if proto_labels is not None else None
 
             combined = np.vstack([emb, proto])
@@ -209,11 +222,12 @@ class VisualizationLogger:
         perplexity: float = 30.0,
         random_state: int = 42,
     ):
-        emb = np.asarray(embeddings)
+        emb = _to_numpy_unit(embeddings)
         y = np.asarray(labels)
 
+        proto = None
         if prototypes is not None:
-            proto = np.asarray(prototypes)
+            proto = _to_numpy_unit(prototypes)
             proto_y = np.asarray(proto_labels) if proto_labels is not None else None
 
             combined = np.vstack([emb, proto])

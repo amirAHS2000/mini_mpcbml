@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 import argparse
 from pathlib import Path
 
@@ -58,18 +59,18 @@ def print_banner(text: str):
     print(f"🚀 {text}")
     print("=" * 70 + "\n")
 
-
-def compute_train_embeddings(model, train_loader, device):
+def compute_train_embeddings(model, train_loader, device, normalize=True):
     model.eval()
     all_feats, all_labels = [], []
     with torch.no_grad():
         for x, y in train_loader:
             x = x.to(device)
             feats = model(x)  # [B, embed_dim]
+            if normalize:
+                feats = F.normalize(feats, p=2, dim=1)
             all_feats.append(feats.cpu())
             all_labels.append(y.cpu())
     return torch.cat(all_feats, dim=0), torch.cat(all_labels, dim=0)
-
 
 def flatten_protos(protos: torch.Tensor) -> torch.Tensor:
     # protos can be [C, K, D] or [C*K, D]
