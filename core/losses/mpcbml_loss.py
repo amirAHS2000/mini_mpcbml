@@ -216,7 +216,7 @@ class MpcbmlLoss(nn.Module):
             xi=xi,
             loss_main=loss_main,
             loss_reg=loss_reg,
-            gamma_reg=self.gamma_reg,
+            lambda_reg=self.lambda_reg,
             global_s_pos=self.global_s_pos,
             global_s_neg=self.global_s_neg,
             theta=self.theta,
