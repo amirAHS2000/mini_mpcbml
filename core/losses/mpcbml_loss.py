@@ -130,7 +130,7 @@ class MpcbmlLoss(nn.Module):
        
         # 2. Setup
         # Use functional normalize for embeddings (cleaner for gradients)
-        z = F.normalize(embeddings, p=2, dim=1)           # [B, D]
+        z = embeddings          # [B, D]
         # We can use self.prototypes directly as they were normalized in _enforce_constraints
        
         B = z.shape[0]
