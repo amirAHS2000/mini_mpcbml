@@ -60,12 +60,17 @@ class MpcbmlLoss(nn.Module):
 
     def update_moving_averages(self, batch_pos_mean, batch_neg_mean):
         if not self.is_initialized:
-            self.global_s_pos.data.copy_(batch_pos_mean)
-            self.global_s_neg.data.copy_(batch_neg_mean)
+            init_momentum = 0.1
+            self.global_s_pos.mul_(init_momentum).add_(batch_pos_mean * (1 - init_momentum))
+            self.global_s_neg.mul_(init_momentum).add_(batch_neg_mean * (1 - init_momentum))
             self.is_initialized = True
         else:
             self.global_s_pos.mul_(self.ma_momentum).add_(batch_pos_mean * (1 - self.ma_momentum))
             self.global_s_neg.mul_(self.ma_momentum).add_(batch_neg_mean * (1 - self.ma_momentum))
+
+        # Clip to valid range (optional safety)
+        self.global_s_pos.clamp_(-1.0, 1.0)
+        self.global_s_neg.clamp_(-1.0, 1.0)
 
     # This function is called at the begining (before training starts)
     @torch.no_grad()
@@ -194,7 +199,8 @@ class MpcbmlLoss(nn.Module):
 
         # Regularization
         # xi is treated as a constant target (stop gradient implied by using buffer values)
-        xi = (self.gamma_reg * self.global_s_pos) + ((1 - self.gamma_reg) * self.global_s_neg)
+        xi = ((self.gamma_reg * self.global_s_pos) + 
+              ((1 - self.gamma_reg) * self.global_s_neg)).detach()
        
         # Reg Loss: max(0, s_neg - xi)
         loss_reg = F.relu(s_neg - xi).mean()
