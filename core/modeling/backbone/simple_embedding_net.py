@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class EmbeddingNet(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
+    def __init__(self, input_dim=2, hidden_dim=128, output_dim=64):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(input_dim, hidden_dim), nn.ReLU(),
