@@ -273,14 +273,14 @@ def main():
                 protos_now = flatten_protos(criterion.prototypes.detach().cpu())
                 proto_labels = torch.arange(N_CLASSES).repeat_interleave(K_PROTOS)
 
-                viz_logger.plot_embeddings_with_umap(
-                    embeddings=X_embed.numpy(),
-                    labels=y_embed.numpy(),
-                    prototypes=protos_now.numpy(),
-                    proto_labels=proto_labels.numpy(),
-                    title=f"Epoch {current_epoch} - UMAP",
-                    filename=f"epoch_{current_epoch:03d}_umap.png",
-                )
+                # viz_logger.plot_embeddings_with_umap(
+                #     embeddings=X_embed.numpy(),
+                #     labels=y_embed.numpy(),
+                #     prototypes=protos_now.numpy(),
+                #     proto_labels=proto_labels.numpy(),
+                #     title=f"Epoch {current_epoch} - UMAP",
+                #     filename=f"epoch_{current_epoch:03d}_umap.png",
+                # )
 
         # --- Evaluation phase (recall@k) ---
         model.eval()

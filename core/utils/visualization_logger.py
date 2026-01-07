@@ -411,7 +411,7 @@ def save_prototypes_visualization(
 
     # 5) Data + prototypes for multiple epochs (initial + selected)
     if tracker is not None:
-        epochs_to_plot = [0, 1, 5, 10, 15, 20, 30, 40, 50]
+        epochs_to_plot = [0, 1, 5, 10, 15, 20, 30, 40, 50, 60, 70, 80, 90, 100]
         for ep in epochs_to_plot:
             if ep in tracker.epoch_numbers:
                 idx = tracker.epoch_numbers.index(ep)

@@ -60,17 +60,12 @@ class MpcbmlLoss(nn.Module):
 
     def update_moving_averages(self, batch_pos_mean, batch_neg_mean):
         if not self.is_initialized:
-            init_momentum = 0.1
-            self.global_s_pos.mul_(init_momentum).add_(batch_pos_mean * (1 - init_momentum))
-            self.global_s_neg.mul_(init_momentum).add_(batch_neg_mean * (1 - init_momentum))
+            self.global_s_pos.data.copy_(batch_pos_mean)
+            self.global_s_neg.data.copy_(batch_neg_mean)
             self.is_initialized = True
         else:
             self.global_s_pos.mul_(self.ma_momentum).add_(batch_pos_mean * (1 - self.ma_momentum))
             self.global_s_neg.mul_(self.ma_momentum).add_(batch_neg_mean * (1 - self.ma_momentum))
-
-        # Clip to valid range (optional safety)
-        self.global_s_pos.clamp_(-1.0, 1.0)
-        self.global_s_neg.clamp_(-1.0, 1.0)
 
     # This function is called at the begining (before training starts)
     @torch.no_grad()
@@ -130,7 +125,7 @@ class MpcbmlLoss(nn.Module):
        
         # 2. Setup
         # Use functional normalize for embeddings (cleaner for gradients)
-        z = embeddings          # [B, D]
+        z = F.normalize(embeddings, p=2, dim=1)  # [B, D] - normalized
         # We can use self.prototypes directly as they were normalized in _enforce_constraints
        
         B = z.shape[0]
