@@ -21,7 +21,7 @@ LOSSES:
   NAME: mpcbml_loss
   MPCBML_LOSS:
     INIT_METHOD: random # Options: 'random', 'kmeans', 'mean'
-    N_CLASSES: 15
+    N_CLASSES: 5
     PROTOTYPE_PER_CLASS: 3
     MA_MOMENTUM: 0.9
     GAMMA_REG: 0.2
@@ -31,8 +31,8 @@ LOSSES:
 
 DATA:
   DATASET_NAME: synthetic_gaussian
-  N_CLASSES_TOTAL: 20
-  N_CLASSES_TRAIN: 15
+  N_CLASSES_TOTAL: 8
+  N_CLASSES_TRAIN: 5
   N_SAMPLES: 3000
   TRAIN_BATCHSIZE: 128
   TEST_BATCHSIZE: 128
